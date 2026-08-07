@@ -1,102 +1,12 @@
-name: Sync hash.json
+git add .
 
-on:
-  schedule:
-    - cron: "0 */6 * * *" # каждые 6 часов
-  workflow_dispatch:
+if git diff --cached --quiet; then
+  echo "No changes"
+  exit 0
+fi
 
-jobs:
-  sync:
-    runs-on: ubuntu-latest
+git pull --rebase origin main
 
-    permissions:
-      contents: write
+git commit -m "Update hash.json files"
 
-    steps:
-
-    - name: Checkout custom repo
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-
-    - name: Check upstream changes
-      id: check
-      run: |
-        UPSTREAM_SHA=$(git ls-remote https://github.com/leotorrez/ZZ-Model-Importer-Assets.git HEAD | cut -f1)
-
-        echo "Upstream SHA:"
-        echo "$UPSTREAM_SHA"
-
-        if [ -f .upstream_sha ]; then
-          OLD_SHA=$(cat .upstream_sha)
-        else
-          OLD_SHA=""
-        fi
-
-        echo "Previous SHA:"
-        echo "$OLD_SHA"
-
-        if [ "$UPSTREAM_SHA" = "$OLD_SHA" ]; then
-          echo "No upstream changes"
-          echo "changed=false" >> $GITHUB_OUTPUT
-        else
-          echo "Upstream changed"
-          echo "changed=true" >> $GITHUB_OUTPUT
-          echo "$UPSTREAM_SHA" > new_upstream_sha
-        fi
-
-
-    - name: Clone upstream hash.json only
-      if: steps.check.outputs.changed == 'true'
-      run: |
-        git clone \
-          --depth 1 \
-          --filter=blob:none \
-          --sparse \
-          https://github.com/leotorrez/ZZ-Model-Importer-Assets.git upstream
-
-        cd upstream
-
-        git sparse-checkout set "**/hash.json"
-
-        cd ..
-
-
-    - name: Sync hash.json files
-      if: steps.check.outputs.changed == 'true'
-      run: |
-        mkdir -p hash_temp
-
-        find upstream -name "hash.json" -exec cp --parents {} hash_temp/ \;
-
-        find . \
-          -path "./upstream" -prune \
-          -o -name "hash.json" -delete
-
-        cp -r hash_temp/* .
-
-        rm -rf hash_temp upstream
-
-
-    - name: Commit changes
-      if: steps.check.outputs.changed == 'true'
-      run: |
-        git pull --rebase origin main
-
-        git add .
-
-        if git diff --cached --quiet; then
-          echo "No changes"
-          exit 0
-        fi
-
-        git commit -m "Update hash.json files"
-
-        mv new_upstream_sha .upstream_sha
-
-        git add .upstream_sha
-
-        git commit -m "Update upstream SHA"
-
-        git push
+git push
