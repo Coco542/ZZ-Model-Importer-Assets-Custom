@@ -1,47 +1,80 @@
-name: Sync hash.json files
+name: Sync hash.json
 
 on:
   schedule:
-    - cron: "0 */6 * * *"
+    - cron: "0 */6 * * *" # каждые 6 часов
   workflow_dispatch:
 
 jobs:
   sync:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
 
-      - name: Clone source repository
-        run: |
-          git clone --depth 1 https://github.com/leotorrez/ZZ-Model-Importer-Assets.git upstream
+    - name: Checkout custom repo
+      uses: actions/checkout@v5
+      with:
+        fetch-depth: 1
 
-      - name: Extract hash.json
-        run: |
-          rm -rf hash_temp
-          mkdir hash_temp
+    - name: Check upstream changes
+      id: check
+      run: |
+        UPSTREAM_SHA=$(git ls-remote https://github.com/leotorrez/ZZ-Model-Importer-Assets.git HEAD | cut -f1)
 
-          find upstream -name "hash.json" -exec cp --parents {} hash_temp/ \;
+        echo "Upstream SHA:"
+        echo "$UPSTREAM_SHA"
 
-          find . -name "hash.json" -delete
+        if [ -f .upstream_sha ]; then
+          OLD_SHA=$(cat .upstream_sha)
+        else
+          OLD_SHA=""
+        fi
 
-          cp -r hash_temp/* ./
+        echo "Previous SHA:"
+        echo "$OLD_SHA"
 
-          rm -rf hash_temp upstream
+        if [ "$UPSTREAM_SHA" = "$OLD_SHA" ]; then
+          echo "No upstream changes"
+          echo "changed=false" >> $GITHUB_OUTPUT
+        else
+          echo "Upstream changed"
+          echo "changed=true" >> $GITHUB_OUTPUT
+        fi
 
-      - name: Check files
-        run: |
-          echo "Found hash files:"
-          find . -name "hash.json" | head -20
+        echo "$UPSTREAM_SHA" > .upstream_sha
 
-      - name: Commit changes
-        run: |
-          git config user.name "github-actions"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add .
+    - name: Clone upstream
+      if: steps.check.outputs.changed == 'true'
+      run: |
+        git clone --depth 1 https://github.com/leotorrez/ZZ-Model-Importer-Assets.git upstream
 
-          git commit -m "Update hash.json files" || echo "No changes"
 
-          git push
+    - name: Sync hash.json files
+      if: steps.check.outputs.changed == 'true'
+      run: |
+        mkdir -p hash_temp
+
+        find upstream -name "hash.json" -exec cp --parents {} hash_temp/ \;
+
+        find . -name "hash.json" -delete
+
+        cp -r hash_temp/* .
+
+        rm -rf hash_temp upstream
+
+
+    - name: Commit changes
+      if: steps.check.outputs.changed == 'true'
+      run: |
+        git config user.name "github-actions"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+        git add .
+
+        git commit -m "Update hash.json files" || echo "No changes"
+
+        git push
