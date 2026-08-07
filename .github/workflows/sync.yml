@@ -13,23 +13,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download only hash.json
+      - name: Clone only hash.json
         run: |
           git clone --depth 1 --filter=blob:none --sparse https://github.com/leotorrez/ZZ-Model-Importer-Assets.git upstream
+
           cd upstream
           git sparse-checkout set '**/hash.json'
           cd ..
 
-          rm -rf hashes
-          mkdir hashes
-          cp -r upstream/* hashes/
+      - name: Copy files preserving structure
+        run: |
+          rsync -av --delete upstream/ ./
 
-      - name: Commit update
+          rm -rf upstream
+
+      - name: Commit changes
         run: |
           git config user.name "github-actions"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add hashes
+          git add .
 
-          git commit -m "Update hash files" || exit 0
+          git commit -m "Update hash.json files" || exit 0
           git push
