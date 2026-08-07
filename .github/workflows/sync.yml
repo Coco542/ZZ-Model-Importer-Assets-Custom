@@ -11,9 +11,9 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
-      - name: Clone only hash.json
+      - name: Clone only hash.json files
         run: |
           git clone --depth 1 --filter=blob:none --sparse https://github.com/leotorrez/ZZ-Model-Importer-Assets.git upstream
 
@@ -21,9 +21,13 @@ jobs:
           git sparse-checkout set --no-cone '**/hash.json'
           cd ..
 
-      - name: Copy files preserving structure
+      - name: Remove old hash.json files
         run: |
-          rsync -av --delete upstream/ ./
+          find . -name "hash.json" -delete
+
+      - name: Copy hash files preserving structure
+        run: |
+          rsync -av --exclude='.git' upstream/ ./
           rm -rf upstream
 
       - name: Commit changes
