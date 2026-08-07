@@ -19,6 +19,7 @@ jobs:
       with:
         fetch-depth: 0
 
+
     - name: Check upstream changes
       id: check
       run: |
@@ -42,15 +43,24 @@ jobs:
         else
           echo "Upstream changed"
           echo "changed=true" >> $GITHUB_OUTPUT
+          echo "$UPSTREAM_SHA" > new_upstream_sha
         fi
 
-        echo "$UPSTREAM_SHA" > .upstream_sha
 
-
-    - name: Clone upstream
+    - name: Clone upstream hash.json only
       if: steps.check.outputs.changed == 'true'
       run: |
-        git clone --depth 1 https://github.com/leotorrez/ZZ-Model-Importer-Assets.git upstream
+        git clone \
+          --depth 1 \
+          --filter=blob:none \
+          --sparse \
+          https://github.com/leotorrez/ZZ-Model-Importer-Assets.git upstream
+
+        cd upstream
+
+        git sparse-checkout set "**/hash.json"
+
+        cd ..
 
 
     - name: Sync hash.json files
@@ -60,7 +70,9 @@ jobs:
 
         find upstream -name "hash.json" -exec cp --parents {} hash_temp/ \;
 
-        find . -name "hash.json" -delete
+        find . \
+          -path "./upstream" -prune \
+          -o -name "hash.json" -delete
 
         cp -r hash_temp/* .
 
@@ -70,8 +82,7 @@ jobs:
     - name: Commit changes
       if: steps.check.outputs.changed == 'true'
       run: |
-        git config user.name "github-actions"
-        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git pull --rebase origin main
 
         git add .
 
@@ -80,8 +91,12 @@ jobs:
           exit 0
         fi
 
-        git pull --rebase origin main
-
         git commit -m "Update hash.json files"
+
+        mv new_upstream_sha .upstream_sha
+
+        git add .upstream_sha
+
+        git commit -m "Update upstream SHA"
 
         git push
