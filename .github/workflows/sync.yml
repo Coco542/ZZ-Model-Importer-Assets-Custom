@@ -1,12 +1,47 @@
-git add .
+name: Sync hash.json
 
-if git diff --cached --quiet; then
-  echo "No changes"
-  exit 0
-fi
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
 
-git pull --rebase origin main
+permissions:
+  contents: write
 
-git commit -m "Update hash.json files"
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-git push
+      - name: Fetch upstream hash.json files
+        run: |
+          git clone --depth 1 --filter=blob:none --sparse https://github.com/leotorrez/ZZ-Model-Importer-Assets.git upstream
+          cd upstream
+          git sparse-checkout set --no-cone '**/hash.json'
+          cd ..
+
+      - name: Sync only hash.json files
+        run: |
+          find . -type f -name 'hash.json' -not -path './upstream/*' -delete
+          find upstream -type f -name 'hash.json' -print0 | while IFS= read -r -d '' file; do
+            target="${file#upstream/}"
+            mkdir -p "$(dirname "$target")"
+            cp "$file" "$target"
+          done
+          rm -rf upstream
+
+      - name: Commit changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo 'No changes'
+            exit 0
+          fi
+          git commit -m 'Sync hash.json from upstream'
+          git push
