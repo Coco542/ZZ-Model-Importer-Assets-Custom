@@ -18,13 +18,12 @@ jobs:
           git clone --depth 1 --filter=blob:none --sparse https://github.com/leotorrez/ZZ-Model-Importer-Assets.git upstream
 
           cd upstream
-          git sparse-checkout set '**/hash.json'
+          git sparse-checkout set --no-cone '**/hash.json'
           cd ..
 
       - name: Copy files preserving structure
         run: |
           rsync -av --delete upstream/ ./
-
           rm -rf upstream
 
       - name: Commit changes
